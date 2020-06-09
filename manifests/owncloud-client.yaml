@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: owncloud-client
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: run-script
+data:
+  run-script: |
+    #!/bin/bash
+
+    set -x
+
+    FILE_NUM=10
+    FILE_SIZE_KB=1024
+
+    SYNC_DIR=/tmp/owncloud
+    FILE_DIR=${SYNC_DIR}/$(hostname)
+
+    rm -rf "${FILE_DIR}"
+    mkdir -p "${FILE_DIR}"
+    cd "${FILE_DIR}"
+
+    for i in `seq 1 ${FILE_NUM}`
+    do
+        dd if=/dev/zero of=test_${i} bs=1K count=${FILE_SIZE_KB};
+    done
+
+    ls -l ${FILE_DIR}
+
+    /usr/bin/owncloudcmd --user ${OC_USER} --password ${OC_PASSWORD} "${SYNC_DIR}" "${OC_ENDPOINT}"
+
+    echo "finish"
+    while true; do sleep 10000; done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: owncloud-client
+  name: owncloud-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: owncloud-client
+  template:
+    metadata:
+      labels:
+        app: owncloud-client
+    spec:
+      volumes:
+      - name: run-script
+        configMap:
+          name: run-script
+          items:
+            - key: run-script
+              path: run-script
+      containers:
+      - image: takumakume/owncloud-client:0.0.1
+        name: owncloud-client
+        command: ["/bin/bash"]
+        args: ["/mnt/run-script"]
+        env:
+        # Your ownCloud params
+        - name: OC_USER
+          value: ""
+        - name: OC_PASSWORD
+          value: ""
+        - name: OC_ENDPOINT
+          value: ""
+        volumeMounts:
+        - mountPath: /mnt
+          readOnly: true
+          name: run-script
